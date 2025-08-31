@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-libp2p = { version = "0.54", features = ["tokio", "tcp", "tls", "noise", "yamux", "quic", "dns", "mdns"] }
+libp2p = { version = "0.54", features = ["tokio", "tcp", "tls", "noise", "yamux", "quic", "dns", "mdns", "macros"] }
 libp2p-tls = "0.6.2"
 libp2p-noise = "0.46.1"
 libp2p-yamux = "0.47.0"
