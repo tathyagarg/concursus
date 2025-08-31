@@ -1,46 +1,39 @@
-use libp2p::{
-    Multiaddr, PeerId, Swarm, Transport, identity, mdns, noise,
-    swarm::{SwarmBuilder, SwarmEvent},
-    tcp, yamux,
-};
-use tokio::io::{self, AsyncBufReadExt};
+use libp2p::SwarmBuilder;
+use libp2p::futures::StreamExt;
+use libp2p::swarm::SwarmEvent;
+use libp2p::{PeerId, identity};
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Local identity
+async fn main() -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = PeerId::from(id_keys.public());
-    println!("Local peer id: {peer_id}");
+    println!("Local peer id: {:?}", peer_id);
 
-    // Transport stack: TCP + Noise + Yamux
-    let transport = libp2p::tokio_development_transport(id_keys.clone())?;
+    let mdns = libp2p::mdns::tokio::Behaviour::new(libp2p::mdns::Config::default(), peer_id)?;
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_tokio()
+        .with_tcp(
+            Default::default(),
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )?
+        .with_behaviour(|_| libp2p::swarm::dummy::Behaviour)?
+        .build();
 
-    // mDNS for LAN discovery
-    let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)?;
-    let mut swarm = SwarmBuilder::with_tokio_executor(transport, mdns, peer_id).build();
+    swarm.listen_on("/ip4/127.0.0.1/tcp/8080".parse()?)?;
 
-    // stdin task for sending messages
-    let mut stdin = io::BufReader::new(io::stdin()).lines();
-    tokio::spawn(async move {
-        while let Some(Ok(line)) = stdin.next_line().await {
-            println!("(not implemented yet) Would send: {line}");
-        }
-    });
-
-    // Event loop
     loop {
         match swarm.select_next_some().await {
-            SwarmEvent::Behaviour(mdns::Event::Discovered(peers)) => {
-                for (peer, _) in peers {
-                    println!("Discovered: {peer}");
-                }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("Listening on {:?}", address);
             }
-            SwarmEvent::Behaviour(mdns::Event::Expired(peers)) => {
-                for (peer, _) in peers {
-                    println!("Expired: {peer}");
-                }
+            SwarmEvent::Behaviour(event) => {
+                println!("Behaviour event: {:?}", event);
             }
-            _ => {}
+            other => {
+                // Handle other SwarmEvent
+                println!("Swarm event: {:?}", other);
+            }
         }
     }
 }
